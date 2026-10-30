@@ -1,3 +1,4 @@
+
 # System Architecture
 
 ## Overview
@@ -5,6 +6,8 @@
 The Enterprise IT Service Desk Platform is built with Django and Django REST Framework using a layered backend architecture.
 
 The system separates HTTP request handling, authentication and authorization, data validation, business rules, and database persistence.
+
+PostgreSQL 18 is used as the primary relational database. GitHub Actions provides automated testing without Docker or Docker Compose.
 
 ## Architecture Diagram
 
@@ -25,7 +28,7 @@ flowchart TD
 
     ORM["Django ORM"]
 
-    DB["MySQL 8.4<br/>Users / Departments<br/>Tickets / History<br/>Assets"]
+    DB["PostgreSQL 18<br/>Users / Departments<br/>Tickets / History<br/>Assets"]
 
     Client -->|HTTP / REST| Routing
     Routing --> API
@@ -49,13 +52,17 @@ flowchart TD
 flowchart LR
     Source["Source Code"]
 
-    Docker["Docker Compose<br/>Django + MySQL"]
+    Application["Django Application"]
 
-    CI["GitHub Actions CI<br/>Django Check<br/>Pytest"]
+    DB["PostgreSQL 18"]
+
+    CI["GitHub Actions CI<br/>Ubuntu Runner<br/>Django Check<br/>Migration Check<br/>Pytest"]
 
     Docs["OpenAPI / Swagger<br/>/api/docs/<br/>/api/schema/"]
 
-    Source --> Docker
+    Source --> Application
+    Application --> DB
+
     Source --> CI
     Source --> Docs
 ```
@@ -88,7 +95,7 @@ The current service layer primarily handles ticket-domain business logic. Accoun
 
 ### Persistence Layer
 
-Django ORM provides the persistence layer between the application and MySQL.
+Django ORM provides the persistence layer between the application and PostgreSQL 18.
 
 The primary domain data includes:
 
@@ -100,28 +107,39 @@ The primary domain data includes:
 
 ## Infrastructure
 
-### Docker
+### Database
 
-Docker Compose provides containers for:
+PostgreSQL 18 is the primary relational database.
 
-- Django application
-- MySQL database
+The Django application connects to PostgreSQL through the Django PostgreSQL database backend and the psycopg driver.
 
-A persistent Docker volume is used for MySQL data.
-The application waits for the MySQL healthcheck before starting.
+Database connection settings are managed through environment variables:
+
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASSWORD`
+- `DB_HOST`
+- `DB_PORT`
+
+The local development environment uses PostgreSQL on port `5432`.
 
 ### Continuous Integration
 
-GitHub Actions automatically validates pushes and pull requests to the `master` branch.
+GitHub Actions automatically validates pushes and pull requests to the `main` branch.
 
-The CI pipeline performs:
+The CI pipeline runs directly on an Ubuntu virtual machine and does not use Docker or Docker Compose.
 
-- Python environment setup
-- MySQL service startup
-- Dependency installation
+The pipeline performs:
+
+- Python 3.14 environment setup
+- PostgreSQL 18 installation and service startup
+- CI database role and database creation
+- Python dependency installation
 - Django system check
 - Missing migration check
 - Complete Pytest test suite
+
+The CI database account has the `CREATEDB` privilege so pytest-django can create its isolated test database.
 
 The current automated test suite contains 52 tests covering authentication, ticket APIs, RBAC, ticket workflow rules, ticket history, dashboard and report permissions, asset management, and system management behavior.
 

@@ -2,7 +2,7 @@
 
 企業 IT 維運暨工單管理平台，以 Django REST Framework 建置，模擬企業 Helpdesk／MIS 的工單生命週期、角色權限、資產管理、統計報表與系統管理流程。
 
-本專案以完整業務規則與可驗證的權限控制為核心，而非只有 CRUD。Docker 定位為本機開發與作品展示環境，不宣稱為正式 Production 部署方案。
+本專案以完整業務規則與可驗證的權限控制為核心，而非只有 CRUD。系統使用 PostgreSQL 作為資料庫，透過 GitHub Actions 執行自動化測試，不依賴 Docker。
 
 ## 核心功能
 
@@ -14,7 +14,8 @@
 - 使用者、部門與工單分類管理
 - OpenAPI Schema 與 Swagger UI
 - 52 個 Pytest 自動化測試
-- Docker Compose 與 GitHub Actions CI
+- PostgreSQL 18 資料庫
+- GitHub Actions CI
 
 ## 系統架構
 
@@ -37,7 +38,7 @@ Serializers / Validation
         │   ├─ Workflow Rules
         │   └─ History Recording
         ▼
-Django ORM → MySQL
+Django ORM → PostgreSQL 18
 ```
 
 詳細架構請見 `docs/architecture.md`。
@@ -142,36 +143,72 @@ Swagger UI：`/api/docs/`
 
 ## 本機啟動
 
+### 環境需求
+
+- Windows
+- Python 3.14
+- PostgreSQL 18
+- Git
+
 ### 1. 建立虛擬環境並安裝套件
 
 ```bat
-python -m venv venv2
+py -3.14 -m venv venv2
 venv2\Scripts\activate
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 2. 設定環境變數
+### 2. 建立 PostgreSQL 資料庫
+
+確認 PostgreSQL 18 已安裝並且服務正在執行。
+
+第一次建立本機資料庫時，以 PostgreSQL 管理者帳號登入：
+
+```bat
+psql -U postgres -h localhost -p 5432
+```
+
+建立專案資料庫帳號及資料庫：
+
+```sql
+CREATE ROLE enterprise_it_service_desk_user
+WITH LOGIN PASSWORD '請設定自己的資料庫密碼'
+CREATEDB;
+
+CREATE DATABASE enterprise_it_service_desk_db
+OWNER enterprise_it_service_desk_user;
+```
+
+`CREATEDB` 是為了讓本機 pytest-django 能建立獨立的測試資料庫。這是本機開發與測試用途的權限，正式 Production 帳號應依照最小權限原則另外設定。
+
+如果資料庫帳號與資料庫已經建立，則不需要重複執行上述 SQL。
+
+### 3. 設定環境變數
 
 ```bat
 copy .env.example .env
 ```
 
-依本機環境調整 `.env`：
+依照本機 PostgreSQL 設定調整 `.env`：
 
 ```text
 DJANGO_SECRET_KEY=請替換成自己的金鑰
 DJANGO_DEBUG=True
 DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost
+
 DB_NAME=enterprise_it_service_desk_db
-DB_USER=root
-DB_PASSWORD=your_mysql_password
-DB_HOST=127.0.0.1
-DB_PORT=8888
+DB_USER=enterprise_it_service_desk_user
+DB_PASSWORD=your_postgresql_password
+DB_HOST=localhost
+DB_PORT=5432
 ```
+
+`DB_PASSWORD` 必須與建立 PostgreSQL 帳號時設定的密碼一致。
 
 `DJANGO_ALLOWED_HOSTS` 使用逗號分隔。正式環境必須提供獨立的 `DJANGO_SECRET_KEY`，並將 `DJANGO_DEBUG` 設為 `False`。
 
-### 3. 建立資料表並啟動
+### 4. 建立資料表並啟動
 
 ```bat
 python manage.py migrate
@@ -179,22 +216,6 @@ python manage.py runserver
 ```
 
 應用程式：`http://127.0.0.1:8000/`
-
-## Docker
-
-```bat
-copy .env.example .env
-docker compose up --build
-```
-
-Compose 會啟動 Django 與 MySQL 8.4，並等待 MySQL healthcheck 通過後再啟動應用程式。容器預設使用 Django development server，適合本機開發與 Demo。
-
-```bat
-docker compose exec app python manage.py migrate
-docker compose exec app python manage.py check
-docker compose exec app pytest -v
-docker compose down
-```
 
 ## 測試與品質檢查
 
@@ -206,9 +227,10 @@ python manage.py makemigrations --check --dry-run
 pytest -v
 ```
 
-目前驗證基準：
+目前 PostgreSQL 本機驗證基準：
 
 ```text
+PostgreSQL 18.6
 System check identified no issues (0 silenced).
 No changes detected
 52 passed
@@ -216,12 +238,24 @@ No changes detected
 
 ## CI
 
-`.github/workflows/ci.yml` 會在推送或 Pull Request 到 `master` 時啟動 MySQL 8.4、安裝依賴、執行 Django system check、檢查遺漏 migration，並執行完整測試。
+`.github/workflows/ci.yml` 使用 GitHub Actions 執行自動化測試。
+
+當程式碼推送至 `main` 分支，或建立目標為 `main` 的 Pull Request 時，GitHub Actions 會：
+
+1. 啟動 Ubuntu 虛擬機器。
+2. 安裝並啟動 PostgreSQL 18。
+3. 建立 CI 專用資料庫帳號及測試資料庫。
+4. 安裝 Python 3.14 與 `requirements.txt` 套件。
+5. 執行 Django system check。
+6. 檢查是否有遺漏的 Migration。
+7. 執行完整 Pytest 自動化測試。
+
+CI 直接使用 Ubuntu 上的 PostgreSQL 服務，不依賴 Docker 或 Docker Compose。
 
 ## 專案結構
 
 ```text
-Enterprise-IT-Service-Desk-Platform/
+Enterprise-IT-Service-Desk-Platform-PostgreSQL/
 ├─ accounts/
 │  ├─ tests/test_system_management.py
 │  ├─ models.py
@@ -253,15 +287,18 @@ Enterprise-IT-Service-Desk-Platform/
 ├─ docs/
 │  ├─ architecture.md
 │  └─ FINAL_ACCEPTANCE_CHECKLIST.md
-├─ .github/workflows/ci.yml
-├─ compose.yaml
-├─ Dockerfile
+├─ .github/
+│  └─ workflows/
+│     └─ ci.yml
+├─ .env.example
+├─ .gitignore
+├─ requirements.txt
 └─ manage.py
 ```
 
 ## 安全性說明
 
-- `.env`、Log、虛擬環境與測試快取均由 Git／Docker ignore 排除。
+- `.env`、Log、虛擬環境與 Python 快取由 `.gitignore` 排除。
 - Secret Key、Debug 與 Allowed Hosts 支援環境變數設定。
 - 管理 API 同時要求 JWT 驗證與角色權限。
 - 密碼透過 Django Password Hasher 儲存。
@@ -270,3 +307,5 @@ Enterprise-IT-Service-Desk-Platform/
 ## 專案範圍
 
 目前版本已進入 Feature Freeze。後續只處理文件、Demo、面試準備與錯誤修正，不納入 Celery、Redis、WebSocket、SLA Engine、CMDB 或大型通知系統。
+
+本 PostgreSQL 版本以資料庫轉換及既有功能驗證為主要目標，不擴張原有業務功能範圍。

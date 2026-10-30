@@ -1,3 +1,4 @@
+
 # Enterprise IT Service Desk Platform
 
 ## Final Acceptance Checklist
@@ -148,15 +149,59 @@ open → assigned → in_progress → resolved → closed
 
 建議至少使用桌面 `1920 × 1080` 與一個小型視窗各驗收一次。
 
-## 9. Docker
+## 9. PostgreSQL 18
 
-- [ ] `.env` 已由 `.env.example` 建立且沒有提交到 Git。
-- [ ] `docker compose config` 可成功解析。
-- [ ] `docker compose up --build` 可正常啟動。
-- [ ] MySQL healthcheck 通過後 Django 才啟動。
-- [ ] 容器內可執行 migrate、check 與 pytest。
+### 資料庫環境
 
-## 10. Git 與交付內容
+- [ ] PostgreSQL 18 已安裝並正常執行。
+- [ ] 已建立 `enterprise_it_service_desk_db`。
+- [ ] 資料庫 Owner 為 `enterprise_it_service_desk_user`。
+- [ ] 資料庫帳號具有本機測試所需的 `CREATEDB` 權限。
+- [ ] PostgreSQL 使用連接埠 `5432`。
+
+### Django 資料庫連線
+
+- [ ] `.env` 已由 `.env.example` 建立，且沒有提交到 Git。
+- [ ] `DB_NAME`、`DB_USER`、`DB_PASSWORD`、`DB_HOST`、`DB_PORT` 設定正確。
+- [ ] Django 可正常連接 PostgreSQL。
+- [ ] Django Database Backend 使用 PostgreSQL。
+- [ ] `python manage.py migrate` 可正常執行。
+- [ ] `python manage.py showmigrations` 顯示所有 Migration 已套用。
+- [ ] `python manage.py makemigrations --check --dry-run` 顯示 `No changes detected`。
+- [ ] pytest-django 可建立及使用獨立測試資料庫。
+- [ ] 完整執行 `pytest -v`，52 個測試全部通過。
+
+### 資料庫轉換確認
+
+- [ ] `requirements.txt` 使用 `psycopg[binary]`。
+- [ ] `requirements.txt` 不再包含 `mysqlclient`。
+- [ ] Django settings 使用 `django.db.backends.postgresql`。
+- [ ] `.env.example` 使用 PostgreSQL 連線設定。
+- [ ] 專案不再依賴 MySQL。
+
+## 10. GitHub Actions CI
+
+### CI 設定
+
+- [ ] `.github/workflows/ci.yml` 存在。
+- [ ] Push 至 `main` 分支會觸發 CI。
+- [ ] Pull Request 目標為 `main` 時會觸發 CI。
+- [ ] GitHub Actions 使用 Ubuntu 虛擬機器執行。
+- [ ] CI 直接安裝並啟動 PostgreSQL 18。
+- [ ] CI 不使用 Docker 或 Docker Compose。
+- [ ] CI 成功建立專用資料庫帳號及資料庫。
+- [ ] CI 資料庫連線設定使用 PostgreSQL `5432`。
+
+### CI 執行結果
+
+- [ ] Python 3.14 環境建立成功。
+- [ ] `requirements.txt` 套件安裝成功。
+- [ ] Django system check 通過。
+- [ ] Migration check 通過。
+- [ ] Pytest 完整測試通過。
+- [ ] GitHub Actions Workflow 顯示成功（綠色）。
+
+## 11. Git 與交付內容
 
 - [ ] `.env`、`app.log`、`venv2/`、`__pycache__/`、`.pytest_cache/` 未被追蹤。
 - [ ] `git diff --check` 無空白字元錯誤。
@@ -168,12 +213,14 @@ open → assigned → in_progress → resolved → closed
 
 以下全部完成後即可封版：
 
+- [ ] PostgreSQL 18 本機連線正常
 - [ ] Django check passed
 - [ ] Migration check passed
 - [ ] 52 tests passed
 - [ ] 四角色權限驗收完成
 - [ ] Ticket、Asset、Reports、System Management 手動流程完成
 - [ ] 十個主要頁面的 UI 與 Responsive 驗收完成
+- [ ] GitHub Actions PostgreSQL CI 成功
 - [ ] README、架構文件與環境變數範例一致
 - [ ] Git 工作目錄乾淨且遠端版本已更新
 
