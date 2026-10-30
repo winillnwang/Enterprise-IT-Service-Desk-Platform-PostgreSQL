@@ -50,7 +50,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-18 postgresql-client-18
 
-          sudo pg_ctlcluster 18 main stop || true
+          if sudo pg_lsclusters --no-header \
+            | awk '$1 == "18" && $2 == "main" && $4 == "online" { found = 1 } END { exit !found }'; then
+            sudo pg_ctlcluster 18 main stop
+          fi
 
           sudo pg_lsclusters --no-header \
             | awk '$3 == "5432" && $4 == "online" { print $1, $2 }' \
@@ -58,7 +61,12 @@ jobs:
                 sudo pg_ctlcluster "$version" "$cluster" stop
               done
 
-          sudo sed -i 's/^port = .*/port = 5432/' \
+          if ! sudo pg_lsclusters --no-header \
+            | awk '$1 == "18" && $2 == "main" { found = 1 } END { exit !found }'; then
+            sudo pg_createcluster --port=5432 18 main
+          fi
+
+          sudo sed -i 's/^[#[:space:]]*port[[:space:]]*=.*/port = 5432/' \
             /etc/postgresql/18/main/postgresql.conf
 
           sudo pg_ctlcluster 18 main start
@@ -75,9 +83,11 @@ jobs:
           test "$PG_MAJOR_VERSION" = "18"
 
           sudo -u postgres psql \
+            --port=5432 \
             --command "CREATE ROLE enterprise_it_service_desk_user WITH LOGIN PASSWORD 'ci-only-password' CREATEDB;"
 
           sudo -u postgres createdb \
+            --port=5432 \
             --owner=enterprise_it_service_desk_user \
             enterprise_it_service_desk_db
 
